@@ -20,6 +20,12 @@ export default function Splash() {
     const [isLeaving, setIsLeaving] = useState(false);
     const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
+    // Load saved photo from localStorage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem("ourlove-splash-photo");
+        if (saved) setPhotoUrl(saved);
+    }, []);
+
     // Login State
     const [showLogin, setShowLogin] = useState(false);
     const [inputBoy, setInputBoy] = useState("");
@@ -108,8 +114,13 @@ export default function Splash() {
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const url = URL.createObjectURL(file);
-            setPhotoUrl(url);
+            const reader = new FileReader();
+            reader.onload = () => {
+                const base64 = reader.result as string;
+                setPhotoUrl(base64);
+                localStorage.setItem("ourlove-splash-photo", base64);
+            };
+            reader.readAsDataURL(file);
         }
     };
 
