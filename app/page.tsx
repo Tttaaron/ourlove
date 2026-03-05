@@ -57,25 +57,37 @@ export default function Splash() {
 
         const isFirstTime = !boyBirthday || !girlBirthday;
 
+        // Convert 8-digit string to "YYYY年MM月DD日" format
+        const digitsToDate = (digits: string) => {
+            if (digits.length !== 8) return null;
+            return `${digits.slice(0, 4)}年${digits.slice(4, 6)}月${digits.slice(6, 8)}日`;
+        };
+
         if (isFirstTime) {
             if (!inputBoy || !inputGirl) {
                 toast.error("必须填写双方的生日哦！");
                 return;
             }
-            // Add basic format check
-            if (!inputBoy.includes("年") || !inputGirl.includes("年")) {
-                toast.error("请使用 YYYY年MM月DD日 格式");
+            if (inputBoy.length !== 8 || inputGirl.length !== 8) {
+                toast.error("请填写完整的8位生日 (如 20040923)");
                 return;
             }
-            setBirthdays(inputBoy, inputGirl);
-            login(inputBoy); // auto login as boy by default on first setup
+            const boyDate = digitsToDate(inputBoy)!;
+            const girlDate = digitsToDate(inputGirl)!;
+            setBirthdays(boyDate, girlDate);
+            login(boyDate);
             triggerEnterAnimation();
         } else {
             if (!inputBirthday) {
                 toast.error("请输入解锁生日！");
                 return;
             }
-            const success = login(inputBirthday);
+            const birthdayDate = digitsToDate(inputBirthday);
+            if (!birthdayDate) {
+                toast.error("请填写完整的8位生日");
+                return;
+            }
+            const success = login(birthdayDate);
             if (success) {
                 triggerEnterAnimation();
             } else {
