@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Heart, Edit2, Check } from "lucide-react";
+import { getConfig, setConfig } from "@/lib/supabase/data";
 
 export function DayCounter({ startDateParam }: { startDateParam?: string }) {
     const [days, setDays] = useState(0);
@@ -18,6 +19,16 @@ export function DayCounter({ startDateParam }: { startDateParam?: string }) {
         } else if (startDateParam) {
             setAnniversary(startDateParam.split('T')[0]);
         }
+
+        // 异步从 Supabase 同步
+        const sync = async () => {
+            const remote = await getConfig("anniversary");
+            if (remote) {
+                setAnniversary(remote);
+                localStorage.setItem("ourlove-anniversary", remote);
+            }
+        };
+        sync();
     }, [startDateParam]);
 
     useEffect(() => {
@@ -39,6 +50,7 @@ export function DayCounter({ startDateParam }: { startDateParam?: string }) {
     const handleSave = () => {
         localStorage.setItem("ourlove-anniversary", anniversary);
         setIsEditing(false);
+        setConfig("anniversary", anniversary);
     };
 
     if (!mounted) return <div className="animate-pulse h-32 bg-muted/20 rounded-2xl w-full max-w-md mx-auto my-8"></div>;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Edit2, Check, Plane, CalendarHeart } from "lucide-react";
 import { useUser } from "@/components/providers/user-provider";
+import { getConfig, setConfig } from "@/lib/supabase/data";
 
 export function MeetingCountdown() {
     const { perspective } = useUser();
@@ -28,6 +29,17 @@ export function MeetingCountdown() {
         if (storedBoy) setCityBoy(storedBoy);
         if (storedGirl) setCityGirl(storedGirl);
         if (storedDate) setMeetingDate(storedDate);
+
+        // 异步从 Supabase 同步
+        const sync = async () => {
+            const rb = await getConfig("city_boy");
+            const rg = await getConfig("city_girl");
+            const rd = await getConfig("meeting_date");
+            if (rb) { setCityBoy(rb); localStorage.setItem("ourlove-city-boy", rb); }
+            if (rg) { setCityGirl(rg); localStorage.setItem("ourlove-city-girl", rg); }
+            if (rd) { setMeetingDate(rd); localStorage.setItem("ourlove-meeting-date", rd); }
+        };
+        sync();
     }, []);
 
     const saveCities = () => {
@@ -35,11 +47,14 @@ export function MeetingCountdown() {
         localStorage.setItem("ourlove-city-girl", cityGirl);
         setEditBoy(false);
         setEditGirl(false);
+        setConfig("city_boy", cityBoy);
+        setConfig("city_girl", cityGirl);
     };
 
     const saveDate = () => {
         localStorage.setItem("ourlove-meeting-date", meetingDate);
         setEditDate(false);
+        setConfig("meeting_date", meetingDate);
     };
 
     useEffect(() => {

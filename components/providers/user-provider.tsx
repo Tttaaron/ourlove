@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { getConfig, setConfig } from "@/lib/supabase/data";
 
 type Perspective = "boy" | "girl" | null;
 
@@ -23,6 +24,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [isInitialized, setIsInitialized] = useState(false);
 
     useEffect(() => {
+        // 1. 先从 localStorage 快速加载
         const storedBoy = localStorage.getItem("ourlove-boy-bd");
         const storedGirl = localStorage.getItem("ourlove-girl-bd");
         const storedPerspective = localStorage.getItem("ourlove-perspective") as Perspective;
@@ -32,6 +34,22 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (storedPerspective) setPerspective(storedPerspective);
 
         setIsInitialized(true);
+
+        // 2. 异步从 Supabase 同步（跨设备同步的关键）
+        const syncFromSupabase = async () => {
+            const remoteBoy = await getConfig("boy_birthday");
+            const remoteGirl = await getConfig("girl_birthday");
+
+            if (remoteBoy && remoteBoy !== storedBoy) {
+                setBoyBirthday(remoteBoy);
+                localStorage.setItem("ourlove-boy-bd", remoteBoy);
+            }
+            if (remoteGirl && remoteGirl !== storedGirl) {
+                setGirlBirthday(remoteGirl);
+                localStorage.setItem("ourlove-girl-bd", remoteGirl);
+            }
+        };
+        syncFromSupabase();
     }, []);
 
     const setBirthdays = (boy: string, girl: string) => {
@@ -39,6 +57,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         setGirlBirthday(girl);
         localStorage.setItem("ourlove-boy-bd", boy);
         localStorage.setItem("ourlove-girl-bd", girl);
+        // 同步到 Supabase
+        setConfig("boy_birthday", boy);
+        setConfig("girl_birthday", girl);
     };
 
     const login = (birthday: string): boolean => {

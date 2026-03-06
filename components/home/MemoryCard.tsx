@@ -4,6 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCcw, Image as ImageIcon, Edit2, Check, Plus, Trash2, Upload } from "lucide-react";
 import { useUser } from "@/components/providers/user-provider";
+import {
+    getMemories as getSupabaseMemories,
+    addMemory as addSupabaseMemory,
+    updateMemory as updateSupabaseMemory,
+    deleteMemory as deleteSupabaseMemory,
+} from "@/lib/supabase/data";
 
 export function MemoryCard() {
     const { perspective } = useUser();
@@ -19,6 +25,7 @@ export function MemoryCard() {
 
     useEffect(() => {
         setMounted(true);
+        // 1. 先从 localStorage 快速加载
         const stored = localStorage.getItem("ourlove-memories");
         if (stored) {
             try {
@@ -32,15 +39,31 @@ export function MemoryCard() {
                 }
             } catch (e) { }
         }
+
+        // 2. 异步从 Supabase 加载
+        const loadFromSupabase = async () => {
+            const remote = await getSupabaseMemories();
+            if (remote.length > 0) {
+                const mapped = remote.map(r => ({
+                    id: r.id,
+                    img: r.img || "",
+                    text: r.text || "",
+                    date: r.date || "",
+                    mood: r.mood || "未知",
+                    author: r.author || "佚名",
+                }));
+                setMemories(mapped);
+                try { localStorage.setItem("ourlove-memories", JSON.stringify(mapped)); } catch { }
+            }
+        };
+        loadFromSupabase();
     }, []);
 
     const saveMemories = (newMemories: any[]) => {
         setMemories(newMemories);
         try {
             localStorage.setItem("ourlove-memories", JSON.stringify(newMemories));
-        } catch (e) {
-            alert("突破存储限制！请尽量上传小图片。");
-        }
+        } catch { }
     };
 
     const handleNext = (e: React.MouseEvent) => {
@@ -62,15 +85,32 @@ export function MemoryCard() {
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         let updated = [...memories];
         if (isAddingNew) {
             updated = [editForm, ...updated];
             setCurrentIndex(0);
+            saveMemories(updated);
+            // 同步到 Supabase
+            const saved = await addSupabaseMemory({
+                text: editForm.text, date: editForm.date,
+                mood: editForm.mood, author: editForm.author, img: editForm.img,
+            });
+            if (saved?.id) {
+                setMemories(prev => prev.map((m, i) => i === 0 ? { ...m, id: saved.id } : m));
+            }
         } else {
             updated[currentIndex] = editForm;
+            saveMemories(updated);
+            // 同步到 Supabase
+            const mem = memories[currentIndex];
+            if (mem.id) {
+                await updateSupabaseMemory(mem.id, {
+                    text: editForm.text, date: editForm.date,
+                    mood: editForm.mood, author: editForm.author, img: editForm.img,
+                });
+            }
         }
-        saveMemories(updated);
         setIsEditing(false);
         setIsAddingNew(false);
     };
@@ -88,15 +128,20 @@ export function MemoryCard() {
         setIsAddingNew(false);
     };
 
-    const handleDelete = () => {
+    const handleDelete = async () => {
         if (isAddingNew) {
             handleCancel();
             return;
         }
+        const mem = memories[currentIndex];
         const updated = memories.filter((_, i) => i !== currentIndex);
         saveMemories(updated);
         setCurrentIndex(0);
         setIsEditing(false);
+        // 同步到 Supabase
+        if (mem?.id) {
+            await deleteSupabaseMemory(mem.id);
+        }
     };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

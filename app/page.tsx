@@ -9,6 +9,7 @@ import { Heart, UploadCloud, Volume2, VolumeX, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/components/providers/theme-provider";
 import { useUser } from "@/components/providers/user-provider";
+import { getConfig, setConfig } from "@/lib/supabase/data";
 
 export default function Splash() {
     const router = useRouter();
@@ -20,10 +21,19 @@ export default function Splash() {
     const [isLeaving, setIsLeaving] = useState(false);
     const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
-    // Load saved photo from localStorage on mount
+    // Load saved photo from localStorage + Supabase
     useEffect(() => {
         const saved = localStorage.getItem("ourlove-splash-photo");
         if (saved) setPhotoUrl(saved);
+        // 异步从 Supabase 同步
+        const sync = async () => {
+            const remote = await getConfig("splash_photo");
+            if (remote && remote !== saved) {
+                setPhotoUrl(remote);
+                localStorage.setItem("ourlove-splash-photo", remote);
+            }
+        };
+        sync();
     }, []);
 
     // Login State
@@ -119,6 +129,7 @@ export default function Splash() {
                 const base64 = reader.result as string;
                 setPhotoUrl(base64);
                 localStorage.setItem("ourlove-splash-photo", base64);
+                setConfig("splash_photo", base64);
             };
             reader.readAsDataURL(file);
         }

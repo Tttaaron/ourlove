@@ -9,8 +9,16 @@ import {
     Plus, Edit2, Trash2, Check, X, Upload
 } from "lucide-react";
 import Link from "next/link";
+import {
+    getMemories as getSupabaseMemories,
+    addMemory as addSupabaseMemory,
+    updateMemory as updateSupabaseMemory,
+    deleteMemory as deleteSupabaseMemory,
+    type MemoryRow,
+} from "@/lib/supabase/data";
 
 interface Memory {
+    id?: string;
     img: string;
     text: string;
     date: string;
@@ -20,7 +28,7 @@ interface Memory {
 
 const STORAGE_KEY = "ourlove-memories";
 
-function loadMemories(): Memory[] {
+function loadLocalMemories(): Memory[] {
     if (typeof window === "undefined") return [];
     try {
         const stored = localStorage.getItem(STORAGE_KEY);
@@ -28,6 +36,7 @@ function loadMemories(): Memory[] {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed) && parsed.length > 0) {
                 return parsed.map((p: any) => ({
+                    id: p.id || undefined,
                     img: p.img || "",
                     text: p.text || "",
                     date: p.date || "",
@@ -40,12 +49,10 @@ function loadMemories(): Memory[] {
     return [];
 }
 
-function saveMemoriesToStorage(memories: Memory[]) {
+function cacheMemories(memories: Memory[]) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(memories));
-    } catch {
-        alert("存储空间不足！请尽量上传小图片。");
-    }
+    } catch { }
 }
 
 export default function DiaryPage() {
@@ -59,9 +66,31 @@ export default function DiaryPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        const data = loadMemories();
-        setMemories(data);
-        setLoading(false);
+        // 1. 先从 localStorage 快速加载
+        const local = loadLocalMemories();
+        if (local.length > 0) {
+            setMemories(local);
+            setLoading(false);
+        }
+
+        // 2. 异步从 Supabase 加载最新数据
+        const loadFromSupabase = async () => {
+            const remote = await getSupabaseMemories();
+            if (remote.length > 0) {
+                const mapped: Memory[] = remote.map(r => ({
+                    id: r.id,
+                    img: r.img || "",
+                    text: r.text || "",
+                    date: r.date || "",
+                    mood: r.mood || "未知",
+                    author: r.author || "佚名",
+                }));
+                setMemories(mapped);
+                cacheMemories(mapped);
+            }
+            setLoading(false);
+        };
+        loadFromSupabase();
     }, []);
 
     // Derive unique moods for the filter dropdown
@@ -73,17 +102,10 @@ export default function DiaryPage() {
             (filterMood === "all" || m.mood === filterMood) &&
             (search === "" || m.text.includes(search) || m.mood.includes(search) || m.author.includes(search))
         )
-        // Sort by date descending (format YYYY.MM.DD)
         .sort((a, b) => b.date.localeCompare(a.date));
-
-    const updateMemories = (newMemories: Memory[]) => {
-        setMemories(newMemories);
-        saveMemoriesToStorage(newMemories);
-    };
 
     // --- Edit ---
     const startEdit = (idx: number) => {
-        // Find the original index in unsorted/unfiltered array
         const memory = filtered[idx];
         const originalIdx = memories.indexOf(memory);
         setEditingIndex(originalIdx);
@@ -95,22 +117,36 @@ export default function DiaryPage() {
         setEditForm({ img: "", text: "", date: "", mood: "", author: "他" });
     };
 
-    const saveEdit = () => {
+    const saveEdit = async () => {
         if (editingIndex === null) return;
+        const mem = memories[editingIndex];
         const updated = [...memories];
-        updated[editingIndex] = { ...editForm };
-        updateMemories(updated);
+        updated[editingIndex] = { ...editForm, id: mem.id };
+        setMemories(updated);
+        cacheMemories(updated);
         setEditingIndex(null);
+        // 同步到 Supabase
+        if (mem.id) {
+            await updateSupabaseMemory(mem.id, {
+                text: editForm.text, date: editForm.date,
+                mood: editForm.mood, author: editForm.author, img: editForm.img,
+            });
+        }
     };
 
     // --- Delete ---
-    const handleDelete = (idx: number) => {
+    const handleDelete = async (idx: number) => {
         const memory = filtered[idx];
         const originalIdx = memories.indexOf(memory);
         if (originalIdx === -1) return;
         const updated = memories.filter((_, i) => i !== originalIdx);
-        updateMemories(updated);
+        setMemories(updated);
+        cacheMemories(updated);
         if (editingIndex === originalIdx) cancelEdit();
+        // 同步到 Supabase
+        if (memory.id) {
+            await deleteSupabaseMemory(memory.id);
+        }
     };
 
     // --- Add ---
@@ -122,12 +158,24 @@ export default function DiaryPage() {
         setShowAddForm(true);
     };
 
-    const saveAdd = () => {
+    const saveAdd = async () => {
         if (!editForm.text.trim()) return;
-        const updated = [...memories, { ...editForm }];
-        updateMemories(updated);
+        // 先本地乐观更新
+        const newMem: Memory = { ...editForm };
+        const updated = [...memories, newMem];
+        setMemories(updated);
+        cacheMemories(updated);
         setShowAddForm(false);
         setEditForm({ img: "", text: "", date: "", mood: "", author: "他" });
+        // 同步到 Supabase
+        const saved = await addSupabaseMemory({
+            text: newMem.text, date: newMem.date,
+            mood: newMem.mood, author: newMem.author, img: newMem.img,
+        });
+        // 用 Supabase 返回的 id 更新本地
+        if (saved?.id) {
+            setMemories(prev => prev.map(m => m === newMem ? { ...m, id: saved.id } : m));
+        }
     };
 
     const cancelAdd = () => {
