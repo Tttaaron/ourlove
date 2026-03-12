@@ -43,13 +43,13 @@ export async function getAllConfig(): Promise<Record<string, string>> {
 export interface MemoryRow {
     id?: string;
     date: string;
-    title: string;
-    description: string;
+    title?: string;
+    description?: string;
     mood: string;
     author: string;
-    weather: string;
-    location: string;
-    tags: string;
+    weather?: string;
+    location?: string;
+    tags?: string;
     img?: string;
     text?: string;
     created_at?: string;
