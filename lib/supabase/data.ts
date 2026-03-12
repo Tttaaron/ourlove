@@ -50,6 +50,8 @@ export interface MemoryRow {
     weather: string;
     location: string;
     tags: string;
+    img?: string;
+    text?: string;
     created_at?: string;
 }
 
