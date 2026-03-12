@@ -42,11 +42,14 @@ export async function getAllConfig(): Promise<Record<string, string>> {
 
 export interface MemoryRow {
     id?: string;
-    text: string;
     date: string;
+    title: string;
+    description: string;
     mood: string;
     author: string;
-    img: string;
+    weather: string;
+    location: string;
+    tags: string;
     created_at?: string;
 }
 
@@ -63,16 +66,19 @@ export async function getMemories(): Promise<MemoryRow[]> {
     }
 }
 
-export async function addMemory(memory: MemoryRow): Promise<MemoryRow | null> {
+export async function addMemory(memory: Omit<MemoryRow, "id" | "created_at">): Promise<MemoryRow | null> {
     try {
         const { data, error } = await supabase
             .from("memories")
             .insert({
-                text: memory.text,
                 date: memory.date,
+                title: memory.title || "写下标题 📝",
+                description: memory.description || "",
                 mood: memory.mood || "",
                 author: memory.author || "他",
-                img: memory.img || "",
+                weather: memory.weather || "",
+                location: memory.location || "",
+                tags: memory.tags || "",
             })
             .select()
             .single();
