@@ -19,7 +19,7 @@ import {
 } from "@/lib/supabase/data";
 
 interface Memory {
-    id?: string;
+    id?: number;
     date: string;
     title: string;
     description: string;
@@ -65,8 +65,8 @@ function loadLocalMemories(): Memory[] {
                 return parsed.map((p: any) => ({
                     id: p.id || undefined,
                     date: p.date || "",
-                    title: p.title || p.text || "写下标题 📝",
-                    description: p.description || p.text || "",
+                    title: p.title || "写下标题 📝",
+                    description: p.description || "",
                     mood: p.mood || "未知",
                     author: p.author || "他",
                     weather: p.weather || "",
@@ -126,8 +126,8 @@ export default function DiaryPage() {
                 const mapped: Memory[] = remote.map(r => ({
                     id: r.id,
                     date: r.date || "",
-                    title: r.title || r.text || "写下标题 📝",
-                    description: r.description || r.text || "",
+                    title: r.title || "写下标题 📝",
+                    description: r.description || "",
                     mood: r.mood || "未知",
                     author: r.author || "他",
                     weather: r.weather || "",

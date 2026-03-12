@@ -9,6 +9,7 @@ import {
     addMemory as addSupabaseMemory,
     updateMemory as updateSupabaseMemory,
     deleteMemory as deleteSupabaseMemory,
+    addMemoryImage,
 } from "@/lib/supabase/data";
 
 export function MemoryCard() {
@@ -46,8 +47,8 @@ export function MemoryCard() {
             if (remote.length > 0) {
                 const mapped = remote.map(r => ({
                     id: r.id,
-                    img: r.img || "",
-                    text: r.text || "",
+                    img: r.images && r.images.length > 0 ? r.images[0].filename : "",
+                    text: r.description || r.title || "",
                     date: r.date || "",
                     mood: r.mood || "未知",
                     author: r.author || "佚名",
@@ -93,10 +94,13 @@ export function MemoryCard() {
             saveMemories(updated);
             // 同步到 Supabase
             const saved = await addSupabaseMemory({
-                text: editForm.text, date: editForm.date,
-                mood: editForm.mood, author: editForm.author, img: editForm.img,
+                description: editForm.text, date: editForm.date,
+                mood: editForm.mood, author: editForm.author
             });
             if (saved?.id) {
+                if (editForm.img) {
+                    await addMemoryImage(saved.id, editForm.img);
+                }
                 setMemories(prev => prev.map((m, i) => i === 0 ? { ...m, id: saved.id } : m));
             }
         } else {
@@ -106,9 +110,13 @@ export function MemoryCard() {
             const mem = memories[currentIndex];
             if (mem.id) {
                 await updateSupabaseMemory(mem.id, {
-                    text: editForm.text, date: editForm.date,
-                    mood: editForm.mood, author: editForm.author, img: editForm.img,
+                    description: editForm.text, date: editForm.date,
+                    mood: editForm.mood, author: editForm.author
                 });
+                // 如果图片是新上传的 base64
+                if (editForm.img && editForm.img.startsWith('data:image')) {
+                    await addMemoryImage(mem.id, editForm.img);
+                }
             }
         }
         setIsEditing(false);

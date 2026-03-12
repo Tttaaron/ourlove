@@ -40,8 +40,15 @@ export async function getAllConfig(): Promise<Record<string, string>> {
 
 // ==================== Memories (diary entries) ====================
 
+export interface MemoryImageRow {
+    id?: number;
+    memory_id: number;
+    filename: string;
+    original_name?: string;
+}
+
 export interface MemoryRow {
-    id?: string;
+    id?: number;
     date: string;
     title?: string;
     description?: string;
@@ -50,25 +57,28 @@ export interface MemoryRow {
     weather?: string;
     location?: string;
     tags?: string;
-    img?: string;
-    text?: string;
     created_at?: string;
+    // Joined from memory_images
+    images?: MemoryImageRow[];
 }
 
 export async function getMemories(): Promise<MemoryRow[]> {
     try {
         const { data, error } = await supabase
             .from("memories")
-            .select("*")
+            .select("*, memory_images(*)")
             .order("date", { ascending: false });
         if (error || !data) return [];
-        return data;
+        return data.map((row: any) => ({
+            ...row,
+            images: row.memory_images || [],
+        }));
     } catch {
         return [];
     }
 }
 
-export async function addMemory(memory: Omit<MemoryRow, "id" | "created_at">): Promise<MemoryRow | null> {
+export async function addMemory(memory: Omit<MemoryRow, "id" | "created_at" | "images">): Promise<MemoryRow | null> {
     try {
         const { data, error } = await supabase
             .from("memories")
@@ -91,11 +101,13 @@ export async function addMemory(memory: Omit<MemoryRow, "id" | "created_at">): P
     }
 }
 
-export async function updateMemory(id: string, updates: Partial<MemoryRow>): Promise<boolean> {
+export async function updateMemory(id: number, updates: Partial<MemoryRow>): Promise<boolean> {
     try {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { images, ...dbUpdates } = updates;
         const { error } = await supabase
             .from("memories")
-            .update(updates)
+            .update(dbUpdates)
             .eq("id", id);
         return !error;
     } catch {
@@ -103,7 +115,7 @@ export async function updateMemory(id: string, updates: Partial<MemoryRow>): Pro
     }
 }
 
-export async function deleteMemory(id: string): Promise<boolean> {
+export async function deleteMemory(id: number): Promise<boolean> {
     try {
         const { error } = await supabase
             .from("memories")
@@ -112,5 +124,46 @@ export async function deleteMemory(id: string): Promise<boolean> {
         return !error;
     } catch {
         return false;
+    }
+}
+
+// ==================== Memory Images ====================
+
+export async function addMemoryImage(memoryId: number, filename: string, originalName?: string): Promise<MemoryImageRow | null> {
+    try {
+        const { data, error } = await supabase
+            .from("memory_images")
+            .insert({ memory_id: memoryId, filename, original_name: originalName || filename })
+            .select()
+            .single();
+        if (error) { console.warn("addMemoryImage error:", error); return null; }
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+export async function deleteMemoryImage(id: number): Promise<boolean> {
+    try {
+        const { error } = await supabase
+            .from("memory_images")
+            .delete()
+            .eq("id", id);
+        return !error;
+    } catch {
+        return false;
+    }
+}
+
+export async function getMemoryImages(memoryId: number): Promise<MemoryImageRow[]> {
+    try {
+        const { data, error } = await supabase
+            .from("memory_images")
+            .select("*")
+            .eq("memory_id", memoryId);
+        if (error || !data) return [];
+        return data;
+    } catch {
+        return [];
     }
 }
