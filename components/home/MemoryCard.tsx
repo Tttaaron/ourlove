@@ -305,10 +305,10 @@ export function MemoryCard() {
 
                         {/* Back */}
                         <div className="absolute inset-0 glass-card rounded-[2rem] flex flex-col items-center justify-center p-8 text-center border border-primary/30 shadow-[0_0_30px_rgba(255,105,180,0.2)]" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: "var(--card)" }}>
-                            <p className="text-2xl font-serif text-primary leading-relaxed drop-shadow-sm whitespace-pre-wrap">
+                            <div className="w-full max-h-[250px] flex items-center justify-center overflow-y-auto text-2xl font-serif text-primary leading-relaxed drop-shadow-sm whitespace-pre-wrap break-words scrollbar-hide">
                                 "{currentMemory.text}"
-                            </p>
-                            <p className="mt-8 text-sm font-sans tracking-widest opacity-60">那天的风很高，你很甜。</p>
+                            </div>
+                            <p className="mt-6 text-sm font-sans tracking-widest opacity-60 shrink-0">那天的风很高，你很甜。</p>
                         </div>
                     </motion.div>
 
