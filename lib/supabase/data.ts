@@ -136,7 +136,7 @@ export async function uploadImage(file: File): Promise<string | null> {
         const filePath = `${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-            .from('memory-images')
+            .from('123')
             .upload(filePath, file);
 
         if (uploadError) {
@@ -145,7 +145,7 @@ export async function uploadImage(file: File): Promise<string | null> {
         }
 
         const { data } = supabase.storage
-            .from('memory-images')
+            .from('123')
             .getPublicUrl(filePath);
 
         return data.publicUrl;

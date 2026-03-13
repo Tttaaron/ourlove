@@ -5,67 +5,42 @@ import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCcw, Image as ImageIcon, Edit2, Check, Plus, Trash2, Upload } from "lucide-react";
 import { useUser } from "@/components/providers/user-provider";
 import {
-    getMemories as getSupabaseMemories,
-    addMemory as addSupabaseMemory,
-    updateMemory as updateSupabaseMemory,
-    deleteMemory as deleteSupabaseMemory,
-    addMemoryImage,
+    loadMemories,
+    saveCache,
+    addMemory as addMemoryToDb,
+    updateMemory,
+    updateMemoryImage,
+    deleteMemory as deleteMemoryFromDb,
     uploadImage,
-} from "@/lib/supabase/data";
+    type Memory,
+} from "@/lib/memory-cache";
 
 export function MemoryCard() {
     const { perspective } = useUser();
 
-    const [memories, setMemories] = useState<any[]>([]);
+    const [memories, setMemories] = useState<Memory[]>([]);
     const [isFlipped, setIsFlipped] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
     const [isAddingNew, setIsAddingNew] = useState(false);
-    const [editForm, setEditForm] = useState({ img: "", text: "", date: "", mood: "开心", author: "他" });
+    const [editForm, setEditForm] = useState<Memory>({
+        date: "", title: "", description: "", img: "", mood: "开心", author: "他", weather: "", location: "", tags: ""
+    });
     const [mounted, setMounted] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setMounted(true);
-        // 1. 先从 localStorage 快速加载
-        const stored = localStorage.getItem("ourlove-memories");
-        if (stored) {
-            try {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed)) {
-                    setMemories(parsed.map((p: any) => ({
-                        ...p,
-                        mood: p.mood || "未知",
-                        author: p.author || "佚名"
-                    })));
-                }
-            } catch (e) { }
-        }
-
-        // 2. 异步从 Supabase 加载
-        const loadFromSupabase = async () => {
-            const remote = await getSupabaseMemories();
-            if (remote.length > 0) {
-                const mapped = remote.map(r => ({
-                    id: r.id,
-                    img: r.images && r.images.length > 0 ? r.images[0].filename : "",
-                    text: r.description || r.title || "",
-                    date: r.date || "",
-                    mood: r.mood || "未知",
-                    author: r.author || "佚名",
-                }));
-                setMemories(mapped);
-                try { localStorage.setItem("ourlove-memories", JSON.stringify(mapped)); } catch { }
-            }
+        const loadData = async () => {
+            const { memories: loaded } = await loadMemories();
+            setMemories(loaded);
         };
-        loadFromSupabase();
+        loadData();
     }, []);
 
-    const saveMemories = (newMemories: any[]) => {
+    const saveMemories = (newMemories: Memory[]) => {
         setMemories(newMemories);
-        try {
-            localStorage.setItem("ourlove-memories", JSON.stringify(newMemories));
-        } catch { }
+        saveCache(newMemories);
     };
 
     const handleNext = (e: React.MouseEvent) => {
@@ -97,14 +72,8 @@ export function MemoryCard() {
             setCurrentIndex(0);
             saveMemories(updated);
             // 同步到 Supabase
-            const saved = await addSupabaseMemory({
-                description: editForm.text, date: editForm.date,
-                mood: editForm.mood, author: editForm.author
-            });
+            const saved = await addMemoryToDb(editForm);
             if (saved?.id) {
-                if (editForm.img) {
-                    await addMemoryImage(saved.id, editForm.img);
-                }
                 setMemories(prev => prev.map((m, i) => i === 0 ? { ...m, id: saved.id } : m));
             }
         } else {
@@ -113,14 +82,10 @@ export function MemoryCard() {
             // 同步到 Supabase
             const mem = memories[currentIndex];
             if (mem.id) {
-                await updateSupabaseMemory(mem.id, {
-                    description: editForm.text, date: editForm.date,
-                    mood: editForm.mood, author: editForm.author
-                });
-                // 如果图片变化了且是一条 URL（之前可能是空或者是旧的 base64 被重写）
+                await updateMemory(editForm);
                 const currentMemImage = memories[currentIndex].img;
                 if (editForm.img && editForm.img !== currentMemImage) {
-                    await addMemoryImage(mem.id, editForm.img);
+                    await updateMemoryImage(mem.id, editForm.img);
                 }
             }
         }
@@ -129,7 +94,12 @@ export function MemoryCard() {
     };
 
     const handleAdd = () => {
-        const newMemory = { img: "", text: "新的美好回忆 ✨", date: new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '.'), mood: "期待", author: perspective === "girl" ? "她" : "他" };
+        const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '.');
+        const newMemory: Memory = {
+            img: "", date: today, title: "新的美好回忆 ✨",
+            description: "", mood: "期待", author: perspective === "girl" ? "她" : "他",
+            weather: "", location: "", tags: ""
+        };
         setEditForm(newMemory);
         setIsAddingNew(true);
         setIsEditing(true);
@@ -153,7 +123,7 @@ export function MemoryCard() {
         setIsEditing(false);
         // 同步到 Supabase
         if (mem?.id) {
-            await deleteSupabaseMemory(mem.id);
+            await deleteMemoryFromDb(mem.id);
         }
     };
 
@@ -209,8 +179,23 @@ export function MemoryCard() {
             {isEditing ? (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card rounded-[2rem] p-6 border border-primary/30 shadow-xl flex flex-col gap-4 text-foreground/90 h-[380px] overflow-y-auto w-full">
                     <div>
-                        <label className="text-xs opacity-70 mb-1 block">回忆文案</label>
-                        <textarea value={editForm.text} onChange={(e) => setEditForm({ ...editForm, text: e.target.value })} className="w-full bg-background/50 border border-primary/20 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-h-[50px]" />
+                        <label className="text-xs opacity-70 mb-1 block">回忆标题</label>
+                        <input
+                            type="text"
+                            value={editForm.title}
+                            onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                            placeholder="写下标题..."
+                            className="w-full bg-background/50 border border-primary/20 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs opacity-70 mb-1 block">回忆内容</label>
+                        <textarea
+                            value={editForm.description}
+                            onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                            placeholder="写下你们的点滴..."
+                            className="w-full bg-background/50 border border-primary/20 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-h-[50px]"
+                        />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -305,8 +290,9 @@ export function MemoryCard() {
 
                         {/* Back */}
                         <div className="absolute inset-0 glass-card rounded-[2rem] flex flex-col items-center justify-center p-8 text-center border border-primary/30 shadow-[0_0_30px_rgba(255,105,180,0.2)]" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: "var(--card)" }}>
-                            <div className="w-full max-h-[250px] flex items-center justify-center overflow-y-auto text-2xl font-serif text-primary leading-relaxed drop-shadow-sm whitespace-pre-wrap break-words scrollbar-hide">
-                                "{currentMemory.text}"
+                            <div className="w-full max-h-[250px] flex flex-col items-center justify-center overflow-y-auto text-2xl font-serif text-primary leading-relaxed drop-shadow-sm whitespace-pre-wrap break-words scrollbar-hide">
+                                {currentMemory.title && <p className="text-lg mb-2 font-bold">{currentMemory.title}</p>}
+                                <p>"{currentMemory.description || currentMemory.title}"</p>
                             </div>
                             <p className="mt-6 text-sm font-sans tracking-widest opacity-60 shrink-0">那天的风很高，你很甜。</p>
                         </div>

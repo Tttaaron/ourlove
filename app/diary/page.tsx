@@ -11,29 +11,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
-    getMemories as getSupabaseMemories,
-    addMemory as addSupabaseMemory,
-    updateMemory as updateSupabaseMemory,
-    deleteMemory as deleteSupabaseMemory,
-    addMemoryImage,
+    loadMemories,
+    saveCache,
+    addMemory as addMemoryToDb,
+    updateMemory,
+    updateMemoryImage,
+    deleteMemory as deleteMemoryFromDb,
     uploadImage,
-    type MemoryRow,
-} from "@/lib/supabase/data";
-
-interface Memory {
-    id?: number;
-    date: string;
-    title: string;
-    description: string;
-    img?: string;
-    mood: string;
-    author: string;
-    weather: string;
-    location: string;
-    tags: string;
-}
-
-const STORAGE_KEY = "ourlove-memories";
+    type Memory,
+} from "@/lib/memory-cache";
 
 const WEATHER_OPTIONS = ["晴天", "多云", "阴天", "雨天", "雪天", "雾天"];
 const MOOD_EMOJIS: Record<string, string> = {
@@ -56,37 +42,6 @@ function getWeatherIcon(weather?: string) {
         case "雾天": return <Cloud className={iconClass + " text-gray-300"} />;
         default: return <Cloud className={iconClass} />;
     }
-}
-
-function loadLocalMemories(): Memory[] {
-    if (typeof window === "undefined") return [];
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed.map((p: any) => ({
-                    id: p.id || undefined,
-                    date: p.date || "",
-                    title: p.title || "写下标题 📝",
-                    description: p.description || "",
-                    img: p.img || "",
-                    mood: p.mood || "未知",
-                    author: p.author || "他",
-                    weather: p.weather || "",
-                    location: p.location || "",
-                    tags: p.tags || "",
-                }));
-            }
-        }
-    } catch { }
-    return [];
-}
-
-function cacheMemories(memories: Memory[]) {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(memories));
-    } catch { }
 }
 
 export default function DiaryPage() {
@@ -118,33 +73,12 @@ export default function DiaryPage() {
     }), [viewPerspective]);
 
     useEffect(() => {
-        const local = loadLocalMemories();
-        if (local.length > 0) {
-            setMemories(local);
-            setLoading(false);
-        }
-
-        const loadFromSupabase = async () => {
-            const remote = await getSupabaseMemories();
-            if (remote.length > 0) {
-                const mapped: Memory[] = remote.map(r => ({
-                    id: r.id,
-                    date: r.date || "",
-                    title: r.title || "写下标题 📝",
-                    description: r.description || "",
-                    img: r.images && r.images.length > 0 ? r.images[0].filename : "",
-                    mood: r.mood || "未知",
-                    author: r.author || "他",
-                    weather: r.weather || "",
-                    location: r.location || "",
-                    tags: r.tags || "",
-                }));
-                setMemories(mapped);
-                cacheMemories(mapped);
-            }
+        const loadData = async () => {
+            const { memories: loaded } = await loadMemories();
+            setMemories(loaded);
             setLoading(false);
         };
-        loadFromSupabase();
+        loadData();
     }, []);
 
     const allMoods = [...new Set(memories.map(m => m.mood).filter(Boolean))];
@@ -202,25 +136,17 @@ export default function DiaryPage() {
     const saveEdit = async () => {
         if (editingIndex === null) return;
         const mem = memories[editingIndex];
+        const updatedMemory: Memory = { ...editForm, id: mem.id };
         const updated = [...memories];
-        updated[editingIndex] = { ...editForm, id: mem.id };
+        updated[editingIndex] = updatedMemory;
         setMemories(updated);
-        cacheMemories(updated);
+        saveCache(updated);
         setEditingIndex(null);
         if (mem.id) {
-            await updateSupabaseMemory(mem.id, {
-                date: editForm.date,
-                title: editForm.title,
-                description: editForm.description,
-                mood: editForm.mood,
-                author: editForm.author,
-                weather: editForm.weather,
-                location: editForm.location,
-                tags: editForm.tags,
-            });
+            await updateMemory(updatedMemory);
             const currentMemImage = memories[editingIndex].img;
             if (editForm.img && editForm.img !== currentMemImage) {
-                await addMemoryImage(mem.id, editForm.img);
+                await updateMemoryImage(mem.id, editForm.img);
             }
         }
     };
@@ -232,10 +158,10 @@ export default function DiaryPage() {
         if (originalIdx === -1) return;
         const updated = memories.filter((_, i) => i !== originalIdx);
         setMemories(updated);
-        cacheMemories(updated);
+        saveCache(updated);
         if (editingIndex === originalIdx) cancelEdit();
         if (memory.id) {
-            await deleteSupabaseMemory(memory.id);
+            await deleteMemoryFromDb(memory.id);
         }
     };
 
@@ -263,26 +189,14 @@ export default function DiaryPage() {
         const newMem: Memory = { ...editForm, title: editForm.title || "写下标题 📝" };
         const updated = [...memories, newMem];
         setMemories(updated);
-        cacheMemories(updated);
+        saveCache(updated);
         setShowAddForm(false);
         setEditForm({
             date: "", title: "", description: "", img: "", mood: "",
             author: "他", weather: "", location: "", tags: ""
         });
-        const saved = await addSupabaseMemory({
-            date: newMem.date,
-            title: newMem.title,
-            description: newMem.description,
-            mood: newMem.mood,
-            author: newMem.author,
-            weather: newMem.weather,
-            location: newMem.location,
-            tags: newMem.tags,
-        });
+        const saved = await addMemoryToDb(newMem);
         if (saved?.id) {
-            if (newMem.img) {
-                await addMemoryImage(saved.id, newMem.img);
-            }
             setMemories(prev => prev.map(m => m === newMem ? { ...m, id: saved.id } : m));
         }
     };
