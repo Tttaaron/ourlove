@@ -16,6 +16,7 @@ import {
     updateMemory as updateSupabaseMemory,
     deleteMemory as deleteSupabaseMemory,
     addMemoryImage,
+    uploadImage,
     type MemoryRow,
 } from "@/lib/supabase/data";
 
@@ -217,7 +218,8 @@ export default function DiaryPage() {
                 location: editForm.location,
                 tags: editForm.tags,
             });
-            if (editForm.img && editForm.img.startsWith('data:image')) {
+            const currentMemImage = memories[editingIndex].img;
+            if (editForm.img && editForm.img !== currentMemImage) {
                 await addMemoryImage(mem.id, editForm.img);
             }
         }
@@ -619,6 +621,8 @@ function DiaryEditForm({
         primaryBorder: string;
     };
 }) {
+    const [isUploading, setIsUploading] = useState(false);
+
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -661,22 +665,36 @@ function DiaryEditForm({
                         accept="image/*"
                         className="hidden"
                         ref={fileInputRef}
-                        onChange={(e) => {
+                        disabled={isUploading}
+                        onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => setForm({ ...form, img: reader.result as string });
-                                reader.readAsDataURL(file);
+                                try {
+                                    setIsUploading(true);
+                                    const publicUrl = await uploadImage(file);
+                                    if (publicUrl) {
+                                        setForm({ ...form, img: publicUrl });
+                                    } else {
+                                        alert("图片上传失败，请重试");
+                                    }
+                                } catch (error) {
+                                    console.error("Upload failed", error);
+                                    alert("上传出错");
+                                } finally {
+                                    setIsUploading(false);
+                                    if (fileInputRef.current) fileInputRef.current.value = "";
+                                }
                             }
                         }}
                     />
                     <button
                         title="上传图片"
+                        disabled={isUploading}
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex-1 flex items-center justify-center gap-2 border border-dashed border-primary/30 rounded-xl p-3 text-sm text-primary hover:bg-primary/5 transition-all"
+                        className="flex-1 flex items-center justify-center gap-2 border border-dashed border-primary/30 rounded-xl p-3 text-sm text-primary hover:bg-primary/5 transition-all disabled:opacity-50"
                     >
                         <Upload className="w-4 h-4" />
-                        上传照片
+                        {isUploading ? "正在上传..." : (form.img ? "已选图片(点击更改)" : "上传图片")}
                     </button>
                     {form.img && (
                         <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-primary/20 shrink-0">
@@ -789,11 +807,11 @@ function DiaryEditForm({
                     </button>
                 ) : <div />}
                 <div className="flex gap-3">
-                    <button title="取消" onClick={onCancel} className="px-5 py-2.5 rounded-full bg-muted/60 text-foreground hover:bg-muted font-medium transition-all shadow-sm">
+                    <button title="取消" disabled={isUploading} onClick={onCancel} className="px-5 py-2.5 rounded-full bg-muted/60 text-foreground hover:bg-muted font-medium transition-all shadow-sm disabled:opacity-50">
                         取消
                     </button>
-                    <button title="保存" onClick={onSave} className={`px-6 py-2.5 rounded-full ${theme.primaryBg} text-white hover:opacity-90 font-medium transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-1.5`}>
-                        <Check className="w-4 h-4" /> 保存
+                    <button title="保存" disabled={isUploading} onClick={onSave} className={`px-6 py-2.5 rounded-full ${theme.primaryBg} text-white hover:opacity-90 font-medium transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed`}>
+                        <Check className="w-4 h-4" /> {isUploading ? "请等待" : "保存"}
                     </button>
                 </div>
             </div>

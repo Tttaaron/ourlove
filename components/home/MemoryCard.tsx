@@ -10,6 +10,7 @@ import {
     updateMemory as updateSupabaseMemory,
     deleteMemory as deleteSupabaseMemory,
     addMemoryImage,
+    uploadImage,
 } from "@/lib/supabase/data";
 
 export function MemoryCard() {
@@ -86,7 +87,10 @@ export function MemoryCard() {
         }
     };
 
+    const [isUploading, setIsUploading] = useState(false);
+
     const handleSave = async () => {
+        if (isUploading) return;
         let updated = [...memories];
         if (isAddingNew) {
             updated = [editForm, ...updated];
@@ -113,8 +117,9 @@ export function MemoryCard() {
                     description: editForm.text, date: editForm.date,
                     mood: editForm.mood, author: editForm.author
                 });
-                // 如果图片是新上传的 base64
-                if (editForm.img && editForm.img.startsWith('data:image')) {
+                // 如果图片变化了且是一条 URL（之前可能是空或者是旧的 base64 被重写）
+                const currentMemImage = memories[currentIndex].img;
+                if (editForm.img && editForm.img !== currentMemImage) {
                     await addMemoryImage(mem.id, editForm.img);
                 }
             }
@@ -152,39 +157,24 @@ export function MemoryCard() {
         }
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement("canvas");
-                const MAX_WIDTH = 800;
-                const MAX_HEIGHT = 800;
-                let width = img.width;
-                let height = img.height;
-
-                if (width > height && width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                } else if (height > MAX_HEIGHT) {
-                    width *= MAX_HEIGHT / height;
-                    height = MAX_HEIGHT;
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext("2d");
-                ctx?.drawImage(img, 0, 0, width, height);
-
-                const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
-                setEditForm({ ...editForm, img: dataUrl });
-            };
-            img.src = event.target?.result as string;
-        };
-        reader.readAsDataURL(file);
+        try {
+            setIsUploading(true);
+            const publicUrl = await uploadImage(file);
+            if (publicUrl) {
+                setEditForm({ ...editForm, img: publicUrl });
+            } else {
+                alert("图片上传失败，请重试");
+            }
+        } catch (error) {
+            console.error("Upload failed", error);
+            alert("上传出错");
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
     };
 
     if (!mounted) {
@@ -245,10 +235,10 @@ export function MemoryCard() {
 
                         <div>
                             <label htmlFor="file-upload" className="text-xs opacity-70 mb-1 block text-transparent">.</label>
-                            <input id="file-upload" type="file" title="上传回忆照片" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
-                            <button onClick={() => fileInputRef.current?.click()} title="点击上传照片" className="w-full flex items-center justify-center gap-2 bg-background/50 border border-primary/20 hover:border-primary/50 transition-colors rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary text-primary overflow-hidden whitespace-nowrap text-ellipsis">
+                            <input id="file-upload" type="file" title="上传回忆照片" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} disabled={isUploading} />
+                            <button disabled={isUploading} onClick={() => fileInputRef.current?.click()} title="点击上传照片" className="w-full flex items-center justify-center gap-2 bg-background/50 border border-primary/20 hover:border-primary/50 transition-colors rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary text-primary overflow-hidden whitespace-nowrap text-ellipsis disabled:opacity-50">
                                 <Upload className="w-4 h-4 shrink-0" />
-                                {editForm.img && editForm.img.startsWith('data:image') ? '已选择' : '上传图片'}
+                                {isUploading ? "正在上传..." : (editForm.img ? "已选图片(点击更改)" : "上传图片")}
                             </button>
                         </div>
                     </div>
@@ -258,9 +248,9 @@ export function MemoryCard() {
                             <Trash2 className="w-5 h-5" />
                         </button>
                         <div className="flex gap-2">
-                            <button onClick={handleCancel} className="px-4 py-2 rounded-full bg-muted/50 text-foreground hover:bg-muted transition-colors text-sm">取消</button>
-                            <button onClick={handleSave} className="px-4 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors text-sm flex items-center gap-1">
-                                <Check className="w-4 h-4" /> 保存
+                            <button onClick={handleCancel} className="px-4 py-2 rounded-full bg-muted/50 text-foreground hover:bg-muted transition-colors text-sm disabled:opacity-50" disabled={isUploading}>取消</button>
+                            <button onClick={handleSave} className="px-4 py-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/80 transition-colors text-sm flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed" disabled={isUploading}>
+                                <Check className="w-4 h-4" /> {isUploading ? "上传中" : "保存"}
                             </button>
                         </div>
                     </div>
