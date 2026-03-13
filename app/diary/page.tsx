@@ -15,6 +15,7 @@ import {
     addMemory as addSupabaseMemory,
     updateMemory as updateSupabaseMemory,
     deleteMemory as deleteSupabaseMemory,
+    addMemoryImage,
     type MemoryRow,
 } from "@/lib/supabase/data";
 
@@ -23,6 +24,7 @@ interface Memory {
     date: string;
     title: string;
     description: string;
+    img?: string;
     mood: string;
     author: string;
     weather: string;
@@ -67,6 +69,7 @@ function loadLocalMemories(): Memory[] {
                     date: p.date || "",
                     title: p.title || "写下标题 📝",
                     description: p.description || "",
+                    img: p.img || "",
                     mood: p.mood || "未知",
                     author: p.author || "他",
                     weather: p.weather || "",
@@ -93,7 +96,7 @@ export default function DiaryPage() {
     const [viewPerspective, setViewPerspective] = useState<"boy" | "girl">("girl");
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<Memory>({
-        date: "", title: "", description: "", mood: "",
+        date: "", title: "", description: "", img: "", mood: "",
         author: "他", weather: "", location: "", tags: ""
     });
     const [showAddForm, setShowAddForm] = useState(false);
@@ -128,6 +131,7 @@ export default function DiaryPage() {
                     date: r.date || "",
                     title: r.title || "写下标题 📝",
                     description: r.description || "",
+                    img: r.images && r.images.length > 0 ? r.images[0].filename : "",
                     mood: r.mood || "未知",
                     author: r.author || "他",
                     weather: r.weather || "",
@@ -189,7 +193,7 @@ export default function DiaryPage() {
     const cancelEdit = () => {
         setEditingIndex(null);
         setEditForm({
-            date: "", title: "", description: "", mood: "",
+            date: "", title: "", description: "", img: "", mood: "",
             author: "他", weather: "", location: "", tags: ""
         });
     };
@@ -213,6 +217,9 @@ export default function DiaryPage() {
                 location: editForm.location,
                 tags: editForm.tags,
             });
+            if (editForm.img && editForm.img.startsWith('data:image')) {
+                await addMemoryImage(mem.id, editForm.img);
+            }
         }
     };
 
@@ -239,6 +246,7 @@ export default function DiaryPage() {
             date: today,
             title: "",
             description: "",
+            img: "",
             mood: "快乐",
             author: viewPerspective === "girl" ? "她" : "他",
             weather: "",
@@ -256,7 +264,7 @@ export default function DiaryPage() {
         cacheMemories(updated);
         setShowAddForm(false);
         setEditForm({
-            date: "", title: "", description: "", mood: "",
+            date: "", title: "", description: "", img: "", mood: "",
             author: "他", weather: "", location: "", tags: ""
         });
         const saved = await addSupabaseMemory({
@@ -270,6 +278,9 @@ export default function DiaryPage() {
             tags: newMem.tags,
         });
         if (saved?.id) {
+            if (newMem.img) {
+                await addMemoryImage(saved.id, newMem.img);
+            }
             setMemories(prev => prev.map(m => m === newMem ? { ...m, id: saved.id } : m));
         }
     };
@@ -461,11 +472,11 @@ export default function DiaryPage() {
                                             initial={{ opacity: 0, x: -50 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             transition={{ duration: 0.5, delay: i * 0.08 }}
-                                            className="relative mb-14 pl-8 md:pl-14 group"
+                                            className="relative mb-14 pl-6 md:pl-14 group"
                                         >
                                             {/* Timeline Dot */}
-                                            <div className={`absolute top-8 left-[-16px] md:left-[-18px] w-9 h-9 rounded-full bg-background border-[4px] ${theme.primaryBorderFull} z-10 flex items-center justify-center transition-transform duration-300 group-hover:scale-125`} style={{ boxShadow: `0 0 20px ${theme.primaryShadow}` }}>
-                                                <div className={`w-2.5 h-2.5 ${theme.primaryBg} rounded-full shadow-sm`}></div>
+                                            <div className={`absolute top-8 left-[-14px] md:left-[-18px] w-8 h-8 md:w-9 md:h-9 rounded-full bg-background border-[4px] ${theme.primaryBorderFull} z-10 flex items-center justify-center transition-transform duration-300 group-hover:scale-125`} style={{ boxShadow: `0 0 20px ${theme.primaryShadow}` }}>
+                                                <div className={`w-2 h-2 md:w-2.5 md:h-2.5 ${theme.primaryBg} rounded-full shadow-sm`}></div>
                                             </div>
 
                                             {isEditingThis ? (
@@ -504,6 +515,18 @@ export default function DiaryPage() {
                                                             </span>
                                                         )}
                                                     </div>
+
+                                                    {/* Image */}
+                                                    {memory.img && (
+                                                        <div className="mb-5 rounded-2xl overflow-hidden shadow-md max-h-80 w-full bg-black/5 relative group/img">
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img
+                                                                src={memory.img}
+                                                                alt={memory.title || "回忆图片"}
+                                                                className="w-full h-full object-cover rounded-2xl transition-transform duration-700 hover:scale-105"
+                                                            />
+                                                        </div>
+                                                    )}
 
                                                     {/* Title */}
                                                     <h3 className="text-xl font-serif font-bold text-foreground mb-3">{memory.title}</h3>
@@ -627,6 +650,48 @@ function DiaryEditForm({
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     className="w-full bg-background/60 hover:bg-background/80 border border-primary/20 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[100px] transition-all shadow-inner"
                 />
+            </div>
+
+            <div>
+                <label className="text-xs opacity-70 mb-1.5 block font-medium">照片 (可选)</label>
+                <div className="flex items-center gap-3">
+                    <input
+                        title="上传图片文件"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => setForm({ ...form, img: reader.result as string });
+                                reader.readAsDataURL(file);
+                            }
+                        }}
+                    />
+                    <button
+                        title="上传图片"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-2 border border-dashed border-primary/30 rounded-xl p-3 text-sm text-primary hover:bg-primary/5 transition-all"
+                    >
+                        <Upload className="w-4 h-4" />
+                        上传照片
+                    </button>
+                    {form.img && (
+                        <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-primary/20 shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={form.img} alt="预览" className="w-full h-full object-cover" />
+                            <div
+                                className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer text-white"
+                                onClick={() => setForm({ ...form, img: "" })}
+                                title="移除图片"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
