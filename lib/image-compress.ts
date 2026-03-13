@@ -65,7 +65,7 @@ export async function compressImage(file: File): Promise<CompressResult> {
                 // 绘制图片
                 ctx.drawImage(img, 0, 0, width, height);
 
-                // 转换为 Blob
+                // 统一使用 JPEG 格式压缩，确保兼容性
                 canvas.toBlob(
                     (blob) => {
                         if (!blob) {
@@ -84,8 +84,10 @@ export async function compressImage(file: File): Promise<CompressResult> {
                                 }))
                                 .catch(reject);
                         } else {
-                            const compressedFile = new File([blob], file.name, {
-                                type: file.type,
+                            // 生成新的文件名，确保扩展名正确
+                            const baseName = file.name.replace(/\.[^/.]+$/, '');
+                            const compressedFile = new File([blob], `${baseName}.jpg`, {
+                                type: 'image/jpeg',
                                 lastModified: Date.now(),
                             });
 
@@ -97,7 +99,7 @@ export async function compressImage(file: File): Promise<CompressResult> {
                             });
                         }
                     },
-                    file.type,
+                    'image/jpeg',
                     COMPRESS_QUALITY
                 );
             };

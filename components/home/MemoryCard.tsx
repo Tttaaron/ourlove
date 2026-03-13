@@ -166,18 +166,43 @@ export function MemoryCard() {
                             <input id="mood-input" title="输入心情" type="text" value={editForm.mood} placeholder="如：快乐，思念" onChange={(e) => setEditForm({ ...editForm, mood: e.target.value })} className="w-full bg-background/50 border border-primary/20 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                         </div>
                         <div>
+                            <label htmlFor="author-select" className="text-xs opacity-70 mb-1 block">记录人</label>
+                            <select id="author-select" title="选择记录人" value={editForm.author} onChange={(e) => setEditForm({ ...editForm, author: e.target.value })} className="w-full bg-background/50 border border-primary/20 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+                                <option value="他">by 他</option>
+                                <option value="她">by 她</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
                             <label htmlFor="date-input" className="text-xs opacity-70 mb-1 block">日期</label>
                             <input id="date-input" title="输入日期" placeholder="YYYY.MM.DD" type="text" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} className="w-full bg-background/50 border border-primary/20 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                        </div>
+                        <div>
+                            <label htmlFor="file-upload" className="text-xs opacity-70 mb-1 block">照片</label>
+                            <input id="file-upload" type="file" title="上传回忆照片" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} disabled={isUploading} />
+                            <button disabled={isUploading} onClick={() => fileInputRef.current?.click()} title="点击上传照片" className="w-full flex items-center justify-center gap-2 bg-background/50 border border-primary/20 hover:border-primary/50 transition-colors rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary text-primary overflow-hidden whitespace-nowrap text-ellipsis disabled:opacity-50">
+                                <Upload className="w-4 h-4 shrink-0" />
+                                {isUploading ? "上传中..." : (editForm.img ? "已选图片" : "上传图片")}
+                            </button>
                         </div>
                     </div>
 
                     <div>
-                        <label htmlFor="file-upload" className="text-xs opacity-70 mb-1 block">照片</label>
-                        <input id="file-upload" type="file" title="上传回忆照片" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} disabled={isUploading} />
-                        <button disabled={isUploading} onClick={() => fileInputRef.current?.click()} title="点击上传照片" className="w-full flex items-center justify-center gap-2 bg-background/50 border border-primary/20 hover:border-primary/50 transition-colors rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary text-primary overflow-hidden whitespace-nowrap text-ellipsis disabled:opacity-50">
-                            <Upload className="w-4 h-4 shrink-0" />
-                            {isUploading ? "正在上传..." : (editForm.img ? "已选图片(点击更改)" : "上传图片")}
-                        </button>
+                        {editForm.img && (
+                            <div className="relative w-full h-20 rounded-lg overflow-hidden border border-primary/20">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={editForm.img} alt="预览" className="w-full h-full object-cover" />
+                                <div
+                                    className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer text-white"
+                                    onClick={() => setEditForm({ ...editForm, img: "" })}
+                                    title="移除图片"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex justify-between mt-auto pt-2">
@@ -215,9 +240,15 @@ export function MemoryCard() {
                     >
                         {/* Front */}
                         <div className="absolute inset-0 glass-card rounded-[2rem] flex flex-col items-center justify-center p-6 border border-white/20 shadow-xl overflow-hidden" style={{ backfaceVisibility: "hidden" }}>
-                            <div className="absolute top-6 left-6 z-20">
+                            <div className="absolute top-6 left-6 z-20 flex gap-2">
                                 {currentMemory.mood && (
                                     <span className="bg-primary/20 text-primary backdrop-blur-md px-3 py-1 rounded-full text-xs font-medium border border-primary/30 shadow-sm">{currentMemory.mood}</span>
+                                )}
+                                {currentMemory.author && (
+                                    <span className={`backdrop-blur-md px-3 py-1 rounded-full text-xs font-medium border shadow-sm ${currentMemory.author === "他"
+                                        ? "bg-blue-400/20 text-blue-500 border-blue-400/30"
+                                        : "bg-primary/20 text-primary border-primary/30"
+                                        }`}>by {currentMemory.author}</span>
                                 )}
                             </div>
 
