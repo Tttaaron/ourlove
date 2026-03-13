@@ -30,6 +30,9 @@ const MOOD_EMOJIS: Record<string, string> = {
     "惊喜": "😲", "紧张": "😰", "放松": "😌",
 };
 
+// 默认记录人
+const DEFAULT_AUTHOR = "我们";
+
 function getWeatherIcon(weather?: string) {
     if (!weather) return null;
     const iconClass = "w-4 h-4";
@@ -49,28 +52,25 @@ export default function DiaryPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [filterMood, setFilterMood] = useState<string>("all");
-    const [viewPerspective, setViewPerspective] = useState<"boy" | "girl">("girl");
     const [editingIndex, setEditingIndex] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<Memory>({
         date: "", title: "", description: "", img: "", mood: "",
-        author: "他", weather: "", location: "", tags: ""
+        author: DEFAULT_AUTHOR, weather: "", location: "", tags: ""
     });
     const [showAddForm, setShowAddForm] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Theme colors based on perspective
+    // Theme colors
     const theme = useMemo(() => ({
-        primary: viewPerspective === "girl" ? "primary" : "blue-500",
-        primaryText: viewPerspective === "girl" ? "text-primary" : "text-blue-500",
-        primaryBg: viewPerspective === "girl" ? "bg-primary" : "bg-blue-500",
-        primaryBgLight: viewPerspective === "girl" ? "bg-primary/10" : "bg-blue-500/10",
-        primaryBorder: viewPerspective === "girl" ? "border-primary/20" : "border-blue-500/20",
-        primaryBorderFull: viewPerspective === "girl" ? "border-primary" : "border-blue-500",
-        primaryShadow: viewPerspective === "girl" ? "rgba(255,117,143,0.5)" : "rgba(59,130,246,0.5)",
-        gradient: viewPerspective === "girl"
-            ? "from-primary/80 via-primary/30 to-transparent"
-            : "from-blue-500/80 via-blue-500/30 to-transparent",
-    }), [viewPerspective]);
+        primary: "primary",
+        primaryText: "text-primary",
+        primaryBg: "bg-primary",
+        primaryBgLight: "bg-primary/10",
+        primaryBorder: "border-primary/20",
+        primaryBorderFull: "border-primary",
+        primaryShadow: "rgba(255,117,143,0.5)",
+        gradient: "from-primary/80 via-primary/30 to-transparent",
+    }), []);
 
     useEffect(() => {
         const loadData = async () => {
@@ -85,17 +85,12 @@ export default function DiaryPage() {
 
     // Statistics
     const stats = useMemo(() => {
-        const filtered = memories.filter(m =>
-            (viewPerspective === "girl" && m.author === "她") ||
-            (viewPerspective === "boy" && m.author === "他")
-        );
-
         const moodCounts: Record<string, number> = {};
-        filtered.forEach(m => {
+        memories.forEach(m => {
             if (m.mood) moodCounts[m.mood] = (moodCounts[m.mood] || 0) + 1;
         });
 
-        const sortedDates = filtered.map(m => m.date).filter(Boolean).sort();
+        const sortedDates = memories.map(m => m.date).filter(Boolean).sort();
         let timeSpan = 0;
         if (sortedDates.length >= 2) {
             const first = new Date(sortedDates[0].replace(/\./g, "-"));
@@ -103,16 +98,13 @@ export default function DiaryPage() {
             timeSpan = Math.ceil(Math.abs(last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24));
         }
 
-        return { total: filtered.length, moodCounts, timeSpan };
-    }, [memories, viewPerspective]);
+        return { total: memories.length, moodCounts, timeSpan };
+    }, [memories]);
 
-    // Filter + search + perspective
+    // Filter + search
     const filtered = memories
         .filter(m => {
-            const authorMatch = (viewPerspective === "girl" && m.author === "她") ||
-                (viewPerspective === "boy" && m.author === "他");
-            return authorMatch &&
-                (filterMood === "all" || m.mood === filterMood) &&
+            return (filterMood === "all" || m.mood === filterMood) &&
                 (search === "" || m.title.includes(search) || m.description.includes(search) || m.mood.includes(search));
         })
         .sort((a, b) => b.date.localeCompare(a.date));
@@ -129,7 +121,7 @@ export default function DiaryPage() {
         setEditingIndex(null);
         setEditForm({
             date: "", title: "", description: "", img: "", mood: "",
-            author: "他", weather: "", location: "", tags: ""
+            author: DEFAULT_AUTHOR, weather: "", location: "", tags: ""
         });
     };
 
@@ -176,7 +168,7 @@ export default function DiaryPage() {
             description: "",
             img: "",
             mood: "快乐",
-            author: viewPerspective === "girl" ? "她" : "他",
+            author: DEFAULT_AUTHOR,
             weather: "",
             location: "",
             tags: ""
@@ -193,7 +185,7 @@ export default function DiaryPage() {
         setShowAddForm(false);
         setEditForm({
             date: "", title: "", description: "", img: "", mood: "",
-            author: "他", weather: "", location: "", tags: ""
+            author: DEFAULT_AUTHOR, weather: "", location: "", tags: ""
         });
         const saved = await addMemoryToDb(newMem);
         if (saved?.id) {
@@ -224,33 +216,9 @@ export default function DiaryPage() {
                             <HomeIcon className="w-6 h-6" />
                         </Link>
 
-                        <div className="flex items-center gap-4">
-                            <h1 className={`text-3xl font-serif ${theme.primaryText} tracking-widest drop-shadow-sm font-bold`}>
-                                {viewPerspective === "girl" ? "她的日记" : "他的日记"}
-                            </h1>
-
-                            {/* Perspective Toggle */}
-                            <div className="flex glass-card rounded-full p-1 border border-white/20">
-                                <button
-                                    onClick={() => setViewPerspective("girl")}
-                                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewPerspective === "girl"
-                                        ? "bg-primary text-white shadow-md"
-                                        : "hover:bg-primary/10 text-foreground/70"
-                                        }`}
-                                >
-                                    她
-                                </button>
-                                <button
-                                    onClick={() => setViewPerspective("boy")}
-                                    className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${viewPerspective === "boy"
-                                        ? "bg-blue-500 text-white shadow-md"
-                                        : "hover:bg-blue-500/10 text-foreground/70"
-                                        }`}
-                                >
-                                    他
-                                </button>
-                            </div>
-                        </div>
+                        <h1 className={`text-3xl font-serif ${theme.primaryText} tracking-widest drop-shadow-sm font-bold`}>
+                            我们的日记
+                        </h1>
 
                         <div className="flex w-full md:w-auto gap-3 items-center">
                             <div className="relative flex-1 md:w-56 group/search">
@@ -368,7 +336,7 @@ export default function DiaryPage() {
                         <div className="flex flex-col items-center justify-center py-20 text-foreground/50">
                             <Calendar className={`w-12 h-12 mb-4 ${theme.primaryText}/30`} />
                             <p className="text-lg font-sans">
-                                {viewPerspective === "girl" ? "她还没有写下回忆呢" : "他还没有写下回忆呢"}
+                                还没有写下回忆呢
                             </p>
                             <p className="text-sm mt-2 opacity-60">点击右上角 + 开始记录 ✨</p>
                         </div>
@@ -411,16 +379,6 @@ export default function DiaryPage() {
                                                     layout
                                                     className="glass-card p-6 md:p-8 rounded-[2rem] hover:shadow-[0_15px_40px_rgba(0,0,0,0.1)] transition-all duration-500 border border-white/20 relative overflow-hidden backdrop-blur-xl group/card"
                                                 >
-                                                    {/* Author badge */}
-                                                    <div className="absolute top-0 right-0 p-5">
-                                                        <span className={`text-xs font-sans px-3 py-1.5 rounded-full border shadow-sm ${memory.author === "他"
-                                                            ? "bg-blue-500/10 border-blue-500/20 text-blue-500"
-                                                            : "bg-primary/10 border-primary/20 text-primary"
-                                                            }`}>
-                                                            by {memory.author}
-                                                        </span>
-                                                    </div>
-
                                                     {/* Date & mood */}
                                                     <div className={`flex flex-wrap items-center gap-2.5 mb-4 ${theme.primaryText}`}>
                                                         <Calendar className="w-5 h-5 opacity-80" />
@@ -640,17 +598,16 @@ function DiaryEditForm({
                     />
                 </div>
                 <div>
-                    <label htmlFor="diary-author" className="text-xs opacity-70 mb-1.5 block font-medium">记录人</label>
-                    <select
-                        id="diary-author"
-                        title="记录人"
-                        value={form.author}
-                        onChange={(e) => setForm({ ...form, author: e.target.value })}
-                        className="w-full bg-background/60 hover:bg-background/80 border border-primary/20 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none transition-all shadow-inner cursor-pointer"
-                    >
-                        <option value="他">by 他</option>
-                        <option value="她">by 她</option>
-                    </select>
+                    <label htmlFor="diary-date" className="text-xs opacity-70 mb-1.5 block font-medium">日期</label>
+                    <input
+                        id="diary-date"
+                        title="日期"
+                        type="text"
+                        placeholder="YYYY.MM.DD"
+                        value={form.date}
+                        onChange={(e) => setForm({ ...form, date: e.target.value })}
+                        className="w-full bg-background/60 hover:bg-background/80 border border-primary/20 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-inner"
+                    />
                 </div>
             </div>
 
@@ -695,19 +652,6 @@ function DiaryEditForm({
                         className="w-full bg-background/60 hover:bg-background/80 border border-primary/20 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-inner"
                     />
                 </div>
-            </div>
-
-            <div>
-                <label htmlFor="diary-date" className="text-xs opacity-70 mb-1.5 block font-medium">日期</label>
-                <input
-                    id="diary-date"
-                    title="日期"
-                    type="text"
-                    placeholder="YYYY.MM.DD"
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    className="w-full bg-background/60 hover:bg-background/80 border border-primary/20 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-inner"
-                />
             </div>
 
             <div className="flex justify-between mt-4">

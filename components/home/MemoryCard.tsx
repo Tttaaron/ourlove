@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RefreshCcw, Image as ImageIcon, Edit2, Check, Plus, Trash2, Upload } from "lucide-react";
+import { RefreshCcw, Image as ImageIcon, Edit2, Check, Trash2, Upload } from "lucide-react";
 import { useUser } from "@/components/providers/user-provider";
 import {
     loadMemories,
     saveCache,
-    addMemory as addMemoryToDb,
     updateMemory,
     updateMemoryImage,
     deleteMemory as deleteMemoryFromDb,
@@ -16,13 +15,10 @@ import {
 } from "@/lib/memory-cache";
 
 export function MemoryCard() {
-    const { perspective } = useUser();
-
     const [memories, setMemories] = useState<Memory[]>([]);
     const [isFlipped, setIsFlipped] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
-    const [isAddingNew, setIsAddingNew] = useState(false);
     const [editForm, setEditForm] = useState<Memory>({
         date: "", title: "", description: "", img: "", mood: "开心", author: "他", weather: "", location: "", tags: ""
     });
@@ -57,7 +53,6 @@ export function MemoryCard() {
         if (memories[currentIndex]) {
             setEditForm(memories[currentIndex]);
             setIsEditing(true);
-            setIsAddingNew(false);
             setIsFlipped(false);
         }
     };
@@ -66,56 +61,26 @@ export function MemoryCard() {
 
     const handleSave = async () => {
         if (isUploading) return;
-        let updated = [...memories];
-        if (isAddingNew) {
-            updated = [editForm, ...updated];
-            setCurrentIndex(0);
-            saveMemories(updated);
-            // 同步到 Supabase
-            const saved = await addMemoryToDb(editForm);
-            if (saved?.id) {
-                setMemories(prev => prev.map((m, i) => i === 0 ? { ...m, id: saved.id } : m));
-            }
-        } else {
-            updated[currentIndex] = editForm;
-            saveMemories(updated);
-            // 同步到 Supabase
-            const mem = memories[currentIndex];
-            if (mem.id) {
-                await updateMemory(editForm);
-                const currentMemImage = memories[currentIndex].img;
-                if (editForm.img && editForm.img !== currentMemImage) {
-                    await updateMemoryImage(mem.id, editForm.img);
-                }
+        const updated = [...memories];
+        updated[currentIndex] = editForm;
+        saveMemories(updated);
+        // 同步到 Supabase
+        const mem = memories[currentIndex];
+        if (mem.id) {
+            await updateMemory(editForm);
+            const currentMemImage = memories[currentIndex].img;
+            if (editForm.img && editForm.img !== currentMemImage) {
+                await updateMemoryImage(mem.id, editForm.img);
             }
         }
         setIsEditing(false);
-        setIsAddingNew(false);
-    };
-
-    const handleAdd = () => {
-        const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '.');
-        const newMemory: Memory = {
-            img: "", date: today, title: "新的美好回忆 ✨",
-            description: "", mood: "期待", author: perspective === "girl" ? "她" : "他",
-            weather: "", location: "", tags: ""
-        };
-        setEditForm(newMemory);
-        setIsAddingNew(true);
-        setIsEditing(true);
-        setIsFlipped(false);
     };
 
     const handleCancel = () => {
         setIsEditing(false);
-        setIsAddingNew(false);
     };
 
     const handleDelete = async () => {
-        if (isAddingNew) {
-            handleCancel();
-            return;
-        }
         const mem = memories[currentIndex];
         const updated = memories.filter((_, i) => i !== currentIndex);
         saveMemories(updated);
@@ -165,9 +130,6 @@ export function MemoryCard() {
             <div className="flex justify-between items-center mb-4 px-2">
                 <h3 className="text-lg font-serif tracking-widest text-primary drop-shadow-md">今日随机回忆</h3>
                 <div className="flex gap-2">
-                    <button onClick={handleAdd} title="添加回忆" className="p-2 rounded-full hover:bg-white/10 transition-colors text-foreground/60 hover:text-primary z-20">
-                        <Plus className="w-5 h-5" />
-                    </button>
                     {!isEditing && memories.length > 1 && (
                         <button onClick={handleNext} title="换一个" className="p-2 rounded-full hover:bg-white/10 transition-colors text-foreground/60 hover:text-primary z-20">
                             <RefreshCcw className="w-5 h-5" />
@@ -204,28 +166,18 @@ export function MemoryCard() {
                             <input id="mood-input" title="输入心情" type="text" value={editForm.mood} placeholder="如：快乐，思念" onChange={(e) => setEditForm({ ...editForm, mood: e.target.value })} className="w-full bg-background/50 border border-primary/20 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                         </div>
                         <div>
-                            <label htmlFor="author-select" className="text-xs opacity-70 mb-1 block">记录人</label>
-                            <select id="author-select" title="选择记录人" value={editForm.author} onChange={(e) => setEditForm({ ...editForm, author: e.target.value })} className="w-full bg-background/50 border border-primary/20 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
-                                <option value="他">by 他</option>
-                                <option value="她">by 她</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
                             <label htmlFor="date-input" className="text-xs opacity-70 mb-1 block">日期</label>
                             <input id="date-input" title="输入日期" placeholder="YYYY.MM.DD" type="text" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} className="w-full bg-background/50 border border-primary/20 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                         </div>
+                    </div>
 
-                        <div>
-                            <label htmlFor="file-upload" className="text-xs opacity-70 mb-1 block text-transparent">.</label>
-                            <input id="file-upload" type="file" title="上传回忆照片" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} disabled={isUploading} />
-                            <button disabled={isUploading} onClick={() => fileInputRef.current?.click()} title="点击上传照片" className="w-full flex items-center justify-center gap-2 bg-background/50 border border-primary/20 hover:border-primary/50 transition-colors rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary text-primary overflow-hidden whitespace-nowrap text-ellipsis disabled:opacity-50">
-                                <Upload className="w-4 h-4 shrink-0" />
-                                {isUploading ? "正在上传..." : (editForm.img ? "已选图片(点击更改)" : "上传图片")}
-                            </button>
-                        </div>
+                    <div>
+                        <label htmlFor="file-upload" className="text-xs opacity-70 mb-1 block">照片</label>
+                        <input id="file-upload" type="file" title="上传回忆照片" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageUpload} disabled={isUploading} />
+                        <button disabled={isUploading} onClick={() => fileInputRef.current?.click()} title="点击上传照片" className="w-full flex items-center justify-center gap-2 bg-background/50 border border-primary/20 hover:border-primary/50 transition-colors rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary text-primary overflow-hidden whitespace-nowrap text-ellipsis disabled:opacity-50">
+                            <Upload className="w-4 h-4 shrink-0" />
+                            {isUploading ? "正在上传..." : (editForm.img ? "已选图片(点击更改)" : "上传图片")}
+                        </button>
                     </div>
 
                     <div className="flex justify-between mt-auto pt-2">
@@ -246,12 +198,9 @@ export function MemoryCard() {
                         <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4 text-primary/40 group-hover/card:scale-110 group-hover/card:text-primary/60 transition-all duration-500">
                             <ImageIcon className="w-8 h-8" />
                         </div>
-                        <p className="text-foreground/50 text-sm mb-6 text-center leading-relaxed">
-                            还没有回忆呢<br />去添加你们的第一条回忆吧 ✨
+                        <p className="text-foreground/50 text-sm mb-2 text-center leading-relaxed">
+                            还没有回忆呢<br />去日记页面添加吧 ✨
                         </p>
-                        <button onClick={handleAdd} className="px-6 py-2.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all hover:shadow-lg hover:shadow-primary/30 text-sm flex items-center gap-2 group">
-                            <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform" /> 添加回忆
-                        </button>
                     </div>
                 </div>
             ) : currentMemory ? (
@@ -266,12 +215,9 @@ export function MemoryCard() {
                     >
                         {/* Front */}
                         <div className="absolute inset-0 glass-card rounded-[2rem] flex flex-col items-center justify-center p-6 border border-white/20 shadow-xl overflow-hidden" style={{ backfaceVisibility: "hidden" }}>
-                            <div className="absolute top-6 left-6 z-20 flex gap-2">
+                            <div className="absolute top-6 left-6 z-20">
                                 {currentMemory.mood && (
                                     <span className="bg-primary/20 text-primary backdrop-blur-md px-3 py-1 rounded-full text-xs font-medium border border-primary/30 shadow-sm">{currentMemory.mood}</span>
-                                )}
-                                {currentMemory.author && (
-                                    <span className="bg-blue-400/20 text-blue-500 backdrop-blur-md px-3 py-1 rounded-full text-xs font-medium border border-blue-400/30 shadow-sm">by {currentMemory.author}</span>
                                 )}
                             </div>
 

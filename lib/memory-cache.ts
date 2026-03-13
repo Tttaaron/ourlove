@@ -9,9 +9,10 @@ import {
     updateMemory as updateSupabaseMemory,
     deleteMemory as deleteSupabaseMemory,
     addMemoryImage,
-    uploadImage,
+    uploadImage as supabaseUploadImage,
     type MemoryRow,
 } from "@/lib/supabase/data";
+import { compressImage } from "@/lib/image-compress";
 
 // 统一的 Memory 数据结构
 export interface Memory {
@@ -193,5 +194,20 @@ export async function deleteMemory(id: number): Promise<boolean> {
     return deleteSupabaseMemory(id);
 }
 
-// 重新导出 uploadImage
-export { uploadImage };
+// 带压缩的上传图片
+export async function uploadImage(file: File): Promise<string | null> {
+    try {
+        // 先检查并压缩图片
+        const { file: processedFile, wasCompressed, originalSize, compressedSize } = await compressImage(file);
+
+        if (wasCompressed) {
+            console.log(`图片已压缩: ${(originalSize / 1024 / 1024).toFixed(2)}MB -> ${(compressedSize / 1024 / 1024).toFixed(2)}MB`);
+        }
+
+        // 上传到 Supabase
+        return await supabaseUploadImage(processedFile);
+    } catch (error) {
+        console.error('Image upload error:', error);
+        return null;
+    }
+}
