@@ -529,7 +529,7 @@ export default function DiaryPage() {
                                                     )}
 
                                                     {/* Title */}
-                                                    <h3 className="text-xl font-serif font-bold text-foreground mb-3">{memory.title}</h3>
+                                                    <h3 className="text-xl font-serif font-bold text-foreground mb-3 break-words">{memory.title}</h3>
 
                                                     {/* Weather, Location, Tags */}
                                                     <div className="flex flex-wrap items-center gap-3 mb-4 text-sm text-foreground/60">
@@ -558,9 +558,9 @@ export default function DiaryPage() {
                                                     </div>
 
                                                     {/* Content */}
-                                                    <p className="font-sans text-foreground/90 leading-relaxed text-lg whitespace-pre-wrap">
+                                                    <div className="font-sans text-foreground/90 leading-relaxed text-lg whitespace-pre-wrap break-words w-full overflow-hidden">
                                                         {memory.description}
-                                                    </p>
+                                                    </div>
 
                                                     {/* Action buttons */}
                                                     <div className="flex gap-2 mt-6 pt-4 border-t border-primary/10 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300">
